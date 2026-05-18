@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Chibi Runner</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050505;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: white;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .game-wrap {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: #050505;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: auto;
+      touch-action: none;
+    }
+
+    .hint {
+      position: absolute;
+      left: 50%;
+      bottom: 28px;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      pointer-events: none;
+      user-select: none;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .hidden {
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-wrap">
+    <canvas id="game"></canvas>
+    <div id="hint" class="hint">SPACE / CLICK / TOUCH : JUMP</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const hint = document.getElementById("hint");
+
+    // =========================================================
+    // 이미지 파일 이름
+    // 같은 폴더에 run1.png, run2.png를 넣으면 됨.
+    // Vite/React public 폴더라면 /run1.png, /run2.png 형태로 바꿔도 됨.
+    // =========================================================
+    const SPRITE_PATHS = ["./run1.png", "./run2.png"];
+
+    const sprites = SPRITE_PATHS.map((src) => {
+      const img = new Image();
+      img.src = src;
+      return img;
+    });
+
+    let canvasW = 0;
+    let canvasH = 0;
+    let dpr = 1;
+
+    const game = {
+      started: false,
+      over: false,
+      time: 0,
+      lastTime: 0,
+      score: 0,
+      best: Number(localStorage.getItem("chibi-runner-best") || 0),
+      speed: 430,
+      baseSpeed: 430,
+      gravity: 2700,
+      groundY: 0,
+      spawnTimer: 0,
+      nextSpawn: 1.25,
+      shake: 0,
+    };
+
+    const player = {
+      x: 0,
+      y: 0,
+      w: 88,
+      h: 88,
+      vy: 0,
+      onGround: true,
+      frame: 0,
+      frameTimer: 0,
+      frameInterval: 0.12,
+    };
+
+    const obstacles = [];
+    const dusts = [];
+    const clouds = [];
+
+    function resize() {
+      dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      canvasW = window.innerWidth;
+      canvasH = window.innerHeight;
+
+      canvas.width = Math.floor(canvasW * dpr);
+      canvas.height = Math.floor(canvasH * dpr);
+      canvas.style.width = canvasW + "px";
+      canvas.style.height = canvasH + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      game.groundY = Math.floor(canvasH * 0.68);
+      player.x = Math.max(64, canvasW * 0.14);
+      player.w = clamp(canvasW * 0.075, 64, 105);
+      player.h = player.w;
+
+      if (player.onGround) {
+        player.y = game.groundY - player.h;
+      }
+
+      makeClouds();
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function rand(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function resetGame() {
+      game.started = true;
+      game.over = false;
+      game.time = 0;
+      game.score = 0;
+      game.speed = game.baseSpeed;
+      game.spawnTimer = 0;
+      game.nextSpawn = 1.0;
+      game.shake = 0;
+
+      player.y = game.groundY - player.h;
+      player.vy = 0;
+      player.onGround = true;
+      player.frame = 0;
+      player.frameTimer = 0;
+
+      obstacles.length = 0;
+      dusts.length = 0;
+      hint.classList.add("hidden");
+    }
+
+    function jump() {
+      if (!game.started) {
+        resetGame();
+        return;
+      }
+
+      if (game.over) {
+        resetGame();
+        return;
+      }
+
+      if (player.onGround) {
+        player.vy = -940;
+        player.onGround = false;
+        spawnDust(player.x + player.w * 0.22, game.groundY, 8);
+      }
+    }
+
+    function spawnObstacle() {
+      const type = Math.random();
+      const size = rand(34, 58);
+      const tall = type > 0.7;
+
+      obstacles.push({
+        x: canvasW + 40,
+        y: game.groundY - (tall ? size * 1.5 : size),
+        w: tall ? size * 0.72 : size,
+        h: tall ? size * 1.5 : size,
+        kind: tall ? "spike" : "rock",
+        passed: false,
+      });
+    }
+
+    function spawnDust(x, y, count) {
+      for (let i = 0; i < count; i++) {
+        dusts.push({
+          x,
+          y: y - rand(2, 12),
+          vx: rand(-130, -40),
+          vy: rand(-80, -10),
+          r: rand(2, 5),
+          life: rand(0.25, 0.55),
+          maxLife: 0.55,
+        });
+      }
+    }
+
+    function makeClouds() {
+      clouds.length = 0;
+      const count = Math.max(3, Math.floor(canvasW / 360));
+      for (let i = 0; i < count; i++) {
+        clouds.push({
+          x: rand(0, canvasW),
+          y: rand(canvasH * 0.12, canvasH * 0.32),
+          s: rand(0.55, 1.1),
+          speed: rand(10, 25),
+        });
+      }
+    }
+
+    function update(dt) {
+      if (!game.started || game.over) return;
+
+      game.time += dt;
+      game.score = Math.floor(game.time * 10);
+      game.speed = game.baseSpeed + game.time * 8;
+
+      player.vy += game.gravity * dt;
+      player.y += player.vy * dt;
+
+      if (player.y + player.h >= game.groundY) {
+        player.y = game.groundY - player.h;
+        player.vy = 0;
+        if (!player.onGround) {
+          spawnDust(player.x + player.w * 0.2, game.groundY, 7);
+        }
+        player.onGround = true;
+      }
+
+      if (player.onGround) {
+        player.frameTimer += dt;
+        if (player.frameTimer >= player.frameInterval) {
+          player.frameTimer = 0;
+          player.frame = player.frame === 0 ? 1 : 0;
+          spawnDust(player.x + player.w * 0.18, game.groundY, 1);
+        }
+      } else {
+        player.frame = 0;
+      }
+
+      game.spawnTimer += dt;
+      if (game.spawnTimer >= game.nextSpawn) {
+        game.spawnTimer = 0;
+        game.nextSpawn = rand(0.85, 1.65) * clamp(520 / game.speed, 0.58, 1.0);
+        spawnObstacle();
+      }
+
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const ob = obstacles[i];
+        ob.x -= game.speed * dt;
+        if (ob.x + ob.w < -80) obstacles.splice(i, 1);
+      }
+
+      for (let i = dusts.length - 1; i >= 0; i--) {
+        const p = dusts[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 260 * dt;
+        p.life -= dt;
+        if (p.life <= 0) dusts.splice(i, 1);
+      }
+
+      for (const cloud of clouds) {
+        cloud.x -= cloud.speed * dt;
+        if (cloud.x < -120) {
+          cloud.x = canvasW + rand(80, 240);
+          cloud.y = rand(canvasH * 0.12, canvasH * 0.32);
+          cloud.s = rand(0.55, 1.1);
+        }
+      }
+
+      checkCollision();
+    }
+
+    function getPlayerHitbox() {
+      // 실제 그림보다 살짝 작게 잡아야 억까 판정이 줄어듦.
+      return {
+        x: player.x + player.w * 0.2,
+        y: player.y + player.h * 0.18,
+        w: player.w * 0.58,
+        h: player.h * 0.72,
+      };
+    }
+
+    function getObstacleHitbox(ob) {
+      return {
+        x: ob.x + ob.w * 0.12,
+        y: ob.y + ob.h * 0.08,
+        w: ob.w * 0.76,
+        h: ob.h * 0.86,
+      };
+    }
+
+    function rectsOverlap(a, b) {
+      return (
+        a.x < b.x + b.w &&
+        a.x + a.w > b.x &&
+        a.y < b.y + b.h &&
+        a.y + a.h > b.y
+      );
+    }
+
+    function checkCollision() {
+      const p = getPlayerHitbox();
+      for (const ob of obstacles) {
+        const o = getObstacleHitbox(ob);
+        if (rectsOverlap(p, o)) {
+          endGame();
+          return;
+        }
+      }
+    }
+
+    function endGame() {
+      game.over = true;
+      game.shake = 10;
+      spawnDust(player.x + player.w * 0.4, player.y + player.h * 0.8, 18);
+      if (game.score > game.best) {
+        game.best = game.score;
+        localStorage.setItem("chibi-runner-best", String(game.best));
+      }
+      hint.classList.remove("hidden");
+      hint.textContent = "GAME OVER - SPACE / CLICK / TOUCH : RETRY";
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvasW, canvasH);
+
+      let sx = 0;
+      let sy = 0;
+      if (game.shake > 0) {
+        sx = rand(-game.shake, game.shake);
+        sy = rand(-game.shake, game.shake);
+        game.shake *= 0.82;
+        if (game.shake < 0.4) game.shake = 0;
+      }
+
+      ctx.save();
+      ctx.translate(sx, sy);
+
+      drawBackground();
+      drawGround();
+      drawDusts();
+      drawObstacles();
+      drawPlayer();
+      drawUI();
+
+      if (!game.started) drawStart();
+      if (game.over) drawGameOver();
+
+      ctx.restore();
+    }
+
+    function drawBackground() {
+      ctx.fillStyle = "#050505";
+      ctx.fillRect(0, 0, canvasW, canvasH);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 2;
+      for (const cloud of clouds) {
+        drawCloud(cloud.x, cloud.y, cloud.s);
+      }
+    }
+
+    function drawCloud(x, y, s) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(s, s);
+      ctx.beginPath();
+      ctx.arc(0, 12, 14, Math.PI, Math.PI * 2);
+      ctx.arc(18, 7, 18, Math.PI, Math.PI * 2);
+      ctx.arc(40, 12, 14, Math.PI, Math.PI * 2);
+      ctx.moveTo(-18, 12);
+      ctx.lineTo(58, 12);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawGround() {
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, game.groundY + 1);
+      ctx.lineTo(canvasW, game.groundY + 1);
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(255,255,255,0.25)";
+      ctx.lineWidth = 1;
+      const offset = (game.time * game.speed * 0.55) % 90;
+      for (let x = -offset; x < canvasW + 90; x += 90) {
+        ctx.beginPath();
+        ctx.moveTo(x, game.groundY + 16);
+        ctx.lineTo(x + rand(12, 32), game.groundY + 16);
+        ctx.stroke();
+      }
+    }
+
+    function drawDusts() {
+      for (const p of dusts) {
+        const alpha = Math.max(0, p.life / p.maxLife);
+        ctx.fillStyle = `rgba(255,255,255,${alpha * 0.45})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawObstacles() {
+      for (const ob of obstacles) {
+        ctx.save();
+        ctx.translate(ob.x, ob.y);
+        ctx.strokeStyle = "rgba(255,255,255,0.82)";
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 3;
+
+        if (ob.kind === "spike") {
+          drawCactusLike(ob.w, ob.h);
+        } else {
+          drawRock(ob.w, ob.h);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    function drawRock(w, h) {
+      ctx.beginPath();
+      ctx.moveTo(w * 0.05, h * 0.95);
+      ctx.quadraticCurveTo(w * 0.1, h * 0.35, w * 0.48, h * 0.18);
+      ctx.quadraticCurveTo(w * 0.85, h * 0.05, w * 0.96, h * 0.95);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.32, h * 0.45);
+      ctx.lineTo(w * 0.5, h * 0.35);
+      ctx.stroke();
+    }
+
+    function drawCactusLike(w, h) {
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      roundRect(w * 0.32, 0, w * 0.36, h, 14);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(w * 0.32, h * 0.38);
+      ctx.lineTo(w * 0.06, h * 0.38);
+      ctx.quadraticCurveTo(w * 0.0, h * 0.38, w * 0.0, h * 0.48);
+      ctx.lineTo(w * 0.0, h * 0.62);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(w * 0.68, h * 0.48);
+      ctx.lineTo(w * 0.94, h * 0.48);
+      ctx.quadraticCurveTo(w, h * 0.48, w, h * 0.38);
+      ctx.lineTo(w, h * 0.27);
+      ctx.stroke();
+
+      for (let i = 0; i < 7; i++) {
+        const px = rand(w * 0.36, w * 0.64);
+        const py = rand(h * 0.1, h * 0.92);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + rand(-7, 7), py + rand(-4, 4));
+        ctx.stroke();
+      }
+    }
+
+    function roundRect(x, y, w, h, r) {
+      const rr = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.lineTo(x + w - rr, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+      ctx.lineTo(x + w, y + h - rr);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+      ctx.lineTo(x + rr, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+      ctx.lineTo(x, y + rr);
+      ctx.quadraticCurveTo(x, y, x + rr, y);
+      ctx.closePath();
+    }
+
+    function drawPlayer() {
+      const img = sprites[player.frame];
+
+      ctx.save();
+
+      if (game.over) {
+        ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
+        ctx.rotate(-0.12);
+        ctx.translate(-player.w / 2, -player.h / 2);
+      } else {
+        const bob = player.onGround ? Math.sin(game.time * 28) * 2.2 : 0;
+        ctx.translate(player.x, player.y + bob);
+      }
+
+      if (img && img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, 0, 0, player.w, player.h);
+      } else {
+        drawFallbackCharacter(0, 0, player.w, player.h);
+      }
+
+      ctx.restore();
+
+      // 히트박스 확인용. 필요하면 아래 주석 해제.
+      // const h = getPlayerHitbox();
+      // ctx.strokeStyle = "red";
+      // ctx.strokeRect(h.x, h.y, h.w, h.h);
+    }
+
+    function drawFallbackCharacter(x, y, w, h) {
+      ctx.save();
+      ctx.translate(x, y);
+
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath();
+      ctx.arc(w * 0.46, h * 0.42, w * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#111";
+      ctx.beginPath();
+      ctx.arc(w * 0.36, h * 0.4, w * 0.045, 0, Math.PI * 2);
+      ctx.arc(w * 0.55, h * 0.4, w * 0.045, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#111";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.39, h * 0.55);
+      ctx.lineTo(w * 0.54, h * 0.55);
+      ctx.stroke();
+
+      ctx.fillStyle = "#111";
+      ctx.fillRect(w * 0.24, h * 0.65, w * 0.4, h * 0.2);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.lineWidth = 5;
+      const leg = player.frame === 0 ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.38, h * 0.84);
+      ctx.lineTo(w * (0.28 + leg * 0.05), h * 0.97);
+      ctx.moveTo(w * 0.55, h * 0.84);
+      ctx.lineTo(w * (0.7 - leg * 0.05), h * 0.97);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawUI() {
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.font = "700 24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(String(game.score).padStart(5, "0"), canvasW - 34, 44);
+
+      ctx.fillStyle = "rgba(255,255,255,0.42)";
+      ctx.font = "700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+      ctx.fillText("BEST " + String(game.best).padStart(5, "0"), canvasW - 34, 70);
+    }
+
+    function drawStart() {
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.font = "800 42px system-ui, sans-serif";
+      ctx.fillText("CHIBI RUNNER", canvasW / 2, canvasH * 0.34);
+
+      ctx.fillStyle = "rgba(255,255,255,0.48)";
+      ctx.font = "500 16px system-ui, sans-serif";
+      ctx.fillText("장애물을 피하면서 최대한 오래 달리기", canvasW / 2, canvasH * 0.34 + 36);
+      ctx.restore();
+    }
+
+    function drawGameOver() {
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(0,0,0,0.36)";
+      ctx.fillRect(0, 0, canvasW, canvasH);
+
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.font = "900 44px system-ui, sans-serif";
+      ctx.fillText("GAME OVER", canvasW / 2, canvasH * 0.36);
+
+      ctx.fillStyle = "rgba(255,255,255,0.58)";
+      ctx.font = "600 18px system-ui, sans-serif";
+      ctx.fillText("SCORE " + game.score, canvasW / 2, canvasH * 0.36 + 40);
+      ctx.restore();
+    }
+
+    function loop(now) {
+      if (!game.lastTime) game.lastTime = now;
+      const dt = Math.min(0.033, (now - game.lastTime) / 1000);
+      game.lastTime = now;
+
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener("resize", resize);
+
+    window.addEventListener("keydown", (e) => {
+      const isJumpKey =
+        e.code === "Space" ||
+        e.key === " " ||
+        e.key === "Spacebar" ||
+        e.code === "ArrowUp" ||
+        e.code === "KeyW";
+
+      if (isJumpKey) {
+        e.preventDefault();
+        jump();
+      }
+    });
+
+    window.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      jump();
+    });
+
+    resize();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
