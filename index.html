@@ -48,7 +48,8 @@
       left: 50%;
       bottom: 28px;
       transform: translateX(-50%);
-      color: rgba(0, 0, 0, 0.55); font-size: 14px;
+      color: rgba(0, 0, 0, 0.55);
+      font-size: 14px;
       letter-spacing: 0.04em;
       pointer-events: none;
       user-select: none;
@@ -78,6 +79,9 @@
     // Vite/React public 폴더라면 /run1.png, /run2.png 형태로 바꿔도 됨.
     // =========================================================
     const SPRITE_PATHS = ["./run1.png", "./run2.png"];
+    // 업로드한 스프라이트가 가로로 긴 비율이라 정사각형으로 그리면 찌그러짐.
+    // run1/run2 기준 대략 1.45:1 비율로 표시.
+    const SPRITE_ASPECT = 1.45;
 
     const sprites = SPRITE_PATHS.map((src) => {
       const img = new Image();
@@ -132,9 +136,13 @@
       canvas.style.height = canvasH + "px";
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      game.groundY = Math.floor(canvasH * 0.68);
-      player.x = Math.max(64, canvasW * 0.14);
-      playerplayer.w = clamp(canvasW * 0.105, 92, 150); player.h = player.w;
+      game.groundY = Math.floor(canvasH * 0.72);
+      player.x = Math.max(72, canvasW * 0.12);
+
+      // 화면에서 더 잘 보이도록 캐릭터를 크게 표시.
+      // 기준은 높이이고, 너가 올린 가로형 스프라이트 비율에 맞춰 너비를 계산함.
+      player.h = clamp(canvasH * 0.19, 135, 220);
+      player.w = player.h * SPRITE_ASPECT;
 
       if (player.onGround) {
         player.y = game.groundY - player.h;
@@ -192,7 +200,8 @@
 
     function spawnObstacle() {
       const type = Math.random();
-      const const size = rand(48, 78); const tall = type > 0.7;
+      const size = rand(58, 94);
+      const tall = type > 0.7;
 
       obstacles.push({
         x: canvasW + 40,
@@ -298,10 +307,12 @@
     function getPlayerHitbox() {
       // 실제 그림보다 살짝 작게 잡아야 억까 판정이 줄어듦.
       return {
-        x: player.x + player.w * 0.2,
-        y: player.y + player.h * 0.18,
-        w: player.w * 0.58,
-        h: player.h * 0.72,
+        // 스프라이트가 가로로 길고 머리카락/옷자락 여백이 있어서
+        // 충돌 판정은 실제 몸통 쪽만 조금 작게 잡음.
+        x: player.x + player.w * 0.24,
+        y: player.y + player.h * 0.22,
+        w: player.w * 0.48,
+        h: player.h * 0.64,
       };
     }
 
@@ -400,14 +411,16 @@
     }
 
     function drawGround() {
-      ctx.strokeStyle = "rgba(0.lineWidth = 3;
+      ctx.strokeStyle = "rgba(0,0,0,0.85)";
+      ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(0, game.groundY + 1);
       ctx.lineTo(canvasW, game.groundY + 1);
       ctx.stroke();
 
       ctx.strokeStyle = "rgba(0,0,0,0.25)";
-      ctxconst offset = (game.time * game.speed * 0.55) % 90;
+      ctx.lineWidth = 1;
+      const offset = (game.time * game.speed * 0.55) % 90;
       for (let x = -offset; x < canvasW + 90; x += 90) {
         ctx.beginPath();
         ctx.moveTo(x, game.groundY + 16);
