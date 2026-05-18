@@ -16,9 +16,9 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #050505;
+      background: #f7f5ef;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: white;
+      color: black;
     }
 
     body {
@@ -31,7 +31,7 @@
       position: relative;
       width: 100vw;
       height: 100vh;
-      background: #050505;
+      background: #f7f5ef;
       overflow: hidden;
     }
 
@@ -48,8 +48,7 @@
       left: 50%;
       bottom: 28px;
       transform: translateX(-50%);
-      color: rgba(255, 255, 255, 0.55);
-      font-size: 14px;
+      color: rgba(0, 0, 0, 0.55); font-size: 14px;
       letter-spacing: 0.04em;
       pointer-events: none;
       user-select: none;
@@ -135,8 +134,7 @@
 
       game.groundY = Math.floor(canvasH * 0.68);
       player.x = Math.max(64, canvasW * 0.14);
-      player.w = clamp(canvasW * 0.075, 64, 105);
-      player.h = player.w;
+      playerplayer.w = clamp(canvasW * 0.105, 92, 150); player.h = player.w;
 
       if (player.onGround) {
         player.y = game.groundY - player.h;
@@ -194,8 +192,7 @@
 
     function spawnObstacle() {
       const type = Math.random();
-      const size = rand(34, 58);
-      const tall = type > 0.7;
+      const const size = rand(48, 78); const tall = type > 0.7;
 
       obstacles.push({
         x: canvasW + 40,
@@ -378,10 +375,10 @@
     }
 
     function drawBackground() {
-      ctx.fillStyle = "#050505";
+      ctx.fillStyle = "#f7f5ef";
       ctx.fillRect(0, 0, canvasW, canvasH);
 
-      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.strokeStyle = "rgba(0,0,0,0.12)";
       ctx.lineWidth = 2;
       for (const cloud of clouds) {
         drawCloud(cloud.x, cloud.y, cloud.s);
@@ -403,16 +400,14 @@
     }
 
     function drawGround() {
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(0.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(0, game.groundY + 1);
       ctx.lineTo(canvasW, game.groundY + 1);
       ctx.stroke();
 
-      ctx.strokeStyle = "rgba(255,255,255,0.25)";
-      ctx.lineWidth = 1;
-      const offset = (game.time * game.speed * 0.55) % 90;
+      ctx.strokeStyle = "rgba(0,0,0,0.25)";
+      ctxconst offset = (game.time * game.speed * 0.55) % 90;
       for (let x = -offset; x < canvasW + 90; x += 90) {
         ctx.beginPath();
         ctx.moveTo(x, game.groundY + 16);
@@ -424,7 +419,7 @@
     function drawDusts() {
       for (const p of dusts) {
         const alpha = Math.max(0, p.life / p.maxLife);
-        ctx.fillStyle = `rgba(255,255,255,${alpha * 0.45})`;
+        ctx.fillStyle = `rgba(0,0,0,${alpha * 0.45})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fill();
@@ -435,8 +430,8 @@
       for (const ob of obstacles) {
         ctx.save();
         ctx.translate(ob.x, ob.y);
-        ctx.strokeStyle = "rgba(255,255,255,0.82)";
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.strokeStyle = "rgba(0,0,0,0.82)";
+        ctx.fillStyle = "rgba(0,0,0,0.08)";
         ctx.lineWidth = 3;
 
         if (ob.kind === "spike") {
@@ -458,7 +453,7 @@
       ctx.fill();
       ctx.stroke();
 
-      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      ctx.strokeStyle = "rgba(0,0,0,0.2)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(w * 0.32, h * 0.45);
@@ -467,7 +462,7 @@
     }
 
     function drawCactusLike(w, h) {
-      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.fillStyle = "rgba(0,0,0,0.06)";
       roundRect(w * 0.32, 0, w * 0.36, h, 14);
       ctx.fill();
       ctx.stroke();
@@ -543,7 +538,7 @@
       ctx.save();
       ctx.translate(x, y);
 
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.fillStyle = "rgba(0,0,0,0.9)";
       ctx.beginPath();
       ctx.arc(w * 0.46, h * 0.42, w * 0.28, 0, Math.PI * 2);
       ctx.fill();
@@ -564,7 +559,7 @@
       ctx.fillStyle = "#111";
       ctx.fillRect(w * 0.24, h * 0.65, w * 0.4, h * 0.2);
 
-      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.strokeStyle = "rgba(0,0,0,0.9)";
       ctx.lineWidth = 5;
       const leg = player.frame === 0 ? 1 : -1;
       ctx.beginPath();
@@ -578,12 +573,12 @@
     }
 
     function drawUI() {
-      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.fillStyle = "rgba(0,0,0,0.88)";
       ctx.font = "700 24px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
       ctx.textAlign = "right";
       ctx.fillText(String(game.score).padStart(5, "0"), canvasW - 34, 44);
 
-      ctx.fillStyle = "rgba(255,255,255,0.42)";
+      ctx.fillStyle = "rgba(0,0,0,0.42)";
       ctx.font = "700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
       ctx.fillText("BEST " + String(game.best).padStart(5, "0"), canvasW - 34, 70);
     }
@@ -591,11 +586,11 @@
     function drawStart() {
       ctx.save();
       ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.fillStyle = "rgba(0,0,0,0.9)";
       ctx.font = "800 42px system-ui, sans-serif";
       ctx.fillText("CHIBI RUNNER", canvasW / 2, canvasH * 0.34);
 
-      ctx.fillStyle = "rgba(255,255,255,0.48)";
+      ctx.fillStyle = "rgba(0,0,0,0.48)";
       ctx.font = "500 16px system-ui, sans-serif";
       ctx.fillText("장애물을 피하면서 최대한 오래 달리기", canvasW / 2, canvasH * 0.34 + 36);
       ctx.restore();
@@ -604,14 +599,14 @@
     function drawGameOver() {
       ctx.save();
       ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(0,0,0,0.36)";
+      ctx.fillStyle = "rgba(255,255,255,0.58)";
       ctx.fillRect(0, 0, canvasW, canvasH);
 
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.fillStyle = "rgba(0,0,0,0.92)";
       ctx.font = "900 44px system-ui, sans-serif";
       ctx.fillText("GAME OVER", canvasW / 2, canvasH * 0.36);
 
-      ctx.fillStyle = "rgba(255,255,255,0.58)";
+      ctx.fillStyle = "rgba(0,0,0,0.58)";
       ctx.font = "600 18px system-ui, sans-serif";
       ctx.fillText("SCORE " + game.score, canvasW / 2, canvasH * 0.36 + 40);
       ctx.restore();
